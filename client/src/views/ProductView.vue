@@ -15,7 +15,7 @@ const recommendedProducts = ref([])
 const quantity = ref(1)
 const mainImage = ref(null)
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+const API_URL = import.meta.env.VITE_API_URL || 'https://evobike-server.vercel.app'
 
 const fetchProduct = async (id) => {
   loading.value = true

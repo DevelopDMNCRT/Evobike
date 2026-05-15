@@ -28,7 +28,7 @@ const isSuccess = ref(false)
 const orderSummary = ref(null)
 const router = useRouter()
 const mpPublicKey = 'APP_USR-3b174f88-7df2-4b88-ad03-df5619188ee8'
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+const API_URL = import.meta.env.VITE_API_URL || 'https://evobike-server.vercel.app'
 
 // ─── Códigos postales de Zamora y Jacona, Michoacán ───────────────────────
 // Zamora: rangos 59600–59699 + algunos adicionales registrados por SEPOMEX

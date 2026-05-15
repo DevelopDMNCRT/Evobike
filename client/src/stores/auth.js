@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+const API_URL = import.meta.env.VITE_API_URL || 'https://evobike-server.vercel.app'
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref(localStorage.getItem('evobike_token') || null)
