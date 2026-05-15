@@ -7,10 +7,10 @@ import { fetchWooCommerceProducts } from '@/services/api'
 
 // Fallback placeholders en caso de que la API falle o esté vacía
 const fallbackProducts = [
-  { name: 'Aguila Pro', price: '$ 24,990.00', compareAtPrice: '$ 28,000.00', badge: 'Popular' },
-  { name: 'Galaxy Plus', price: '$ 18,500.00' },
-  { name: 'Cargo', price: '$ 32,000.00', badge: 'Nuevo' },
-  { name: 'Ricochet', price: '$ 8,900.00', compareAtPrice: '$ 10,500.00' }
+  { name: 'Aguila Pro', price: '$ 24,990.00', compareAtPrice: '$ 28,000.00', badge: 'Popular', image: '/evotank.jpeg' },
+  { name: 'Galaxy Plus', price: '$ 18,500.00', image: '/golf-plus.jpeg' },
+  { name: 'Cargo', price: '$ 32,000.00', badge: 'Nuevo', image: '/cargo.jpeg' },
+  { name: 'Ricochet', price: '$ 8,900.00', compareAtPrice: '$ 10,500.00', image: '/urbex.jpeg' }
 ]
 
 const products = ref([])
