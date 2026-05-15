@@ -80,7 +80,8 @@ app.use('/api/admin', adminAuthMiddleware);
 // ─────────────────────────────────────────────
 
 const db = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_HxDNE2Th5rus@ep-shy-sky-aq84793a-pooler.c-8.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require',
+  // Se ignora process.env.DATABASE_URL temporalmente porque en Vercel tiene un valor de prueba (usuario:password@host)
+  connectionString: 'postgresql://neondb_owner:npg_HxDNE2Th5rus@ep-shy-sky-aq84793a-pooler.c-8.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require',
   ssl: { rejectUnauthorized: false }
 });
 
