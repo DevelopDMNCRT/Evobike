@@ -1,7 +1,6 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const axios = require("axios");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { Pool } = require("pg");
@@ -80,12 +79,8 @@ app.use('/api/admin', adminAuthMiddleware);
 // CONFIGURACIÓN Y CONEXIONES
 // ─────────────────────────────────────────────
 
-const WC_URL = process.env.VITE_WC_URL || "https://tu-tienda.com";
-const WC_KEY = process.env.VITE_WC_CONSUMER_KEY || "";
-const WC_SECRET = process.env.VITE_WC_CONSUMER_SECRET || "";
-
 const db = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_VGpZrwP70vJk@ep-shy-lab-amyh5564-pooler.c-5.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require',
+  connectionString: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_HxDNE2Th5rus@ep-shy-sky-aq84793a-pooler.c-8.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require',
   ssl: { rejectUnauthorized: false }
 });
 
@@ -438,44 +433,37 @@ app.put("/api/clientes/perfil", authMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/clientes/direcciones (protegido) — obtiene las últimas 3 direcciones únicas usadas en WooCommerce
+// GET /api/clientes/direcciones (protegido) — obtiene las últimas 3 direcciones únicas del historial local de compras
 app.get("/api/clientes/direcciones", authMiddleware, async (req, res) => {
   try {
-    const result = await db.query("SELECT email, telefono, nombre, apellido FROM clientes WHERE id = $1", [req.cliente.id]);
+    const result = await db.query("SELECT email FROM clientes WHERE id = $1", [req.cliente.id]);
     if (result.rows.length === 0) return res.status(404).json({ error: "Cliente no encontrado" });
 
-    const clienteDB = result.rows[0];
-    const email = clienteDB.email;
+    const email = result.rows[0].email;
 
-    const response = await axios.get(`${WC_URL}/wp-json/wc/v3/orders`, {
-      params: {
-        billing_email: email,
-        per_page: 50, // Buscar suficientes para encontrar hasta 3 únicas
-        orderby: "date",
-        order: "desc",
-        consumer_key: WC_KEY,
-        consumer_secret: WC_SECRET,
-      },
-    });
-
-    if (!Array.isArray(response.data) || response.data.length === 0) {
-      return res.json([]);
-    }
+    // Buscar en el historial local de compras de clientes_evobike
+    const ordersRes = await db.query(
+      `SELECT nombre, apellido, email, telefono, direccion, ciudad, estado, codigo_postal
+       FROM clientes_evobike 
+       WHERE LOWER(email) = $1 
+       ORDER BY created_at DESC 
+       LIMIT 50`,
+      [email.toLowerCase()]
+    );
 
     const direcciones = [];
     const signatures = new Set(); // Para asegurar unicidad
 
-    for (const order of response.data) {
-      const source = (order.shipping && order.shipping.address_1) ? order.shipping : order.billing;
-      if (!source || !source.address_1) continue;
+    for (const order of ordersRes.rows) {
+      if (!order.direccion) continue;
 
-      const firstName = source.first_name || order.billing.first_name || clienteDB.nombre || '';
-      const lastName = source.last_name || order.billing.last_name || clienteDB.apellido || '';
-      const address = source.address_1;
-      const city = source.city || '';
-      const state = source.state || '';
-      const postcode = source.postcode || '';
-      const phone = order.billing.phone || clienteDB.telefono || '';
+      const firstName = order.nombre || '';
+      const lastName = order.apellido || '';
+      const address = order.direccion;
+      const city = order.ciudad || '';
+      const state = order.estado || '';
+      const postcode = order.codigo_postal || '';
+      const phone = order.telefono || '';
       
       const signature = `${firstName}|${lastName}|${address}|${city}|${state}|${postcode}`.toLowerCase().trim();
 
@@ -484,7 +472,7 @@ app.get("/api/clientes/direcciones", authMiddleware, async (req, res) => {
         direcciones.push({
           firstName,
           lastName,
-          email, 
+          email: order.email, 
           phone,
           address,
           city,
@@ -498,12 +486,12 @@ app.get("/api/clientes/direcciones", authMiddleware, async (req, res) => {
 
     res.json(direcciones);
   } catch (err) {
-    console.error("Error obteniendo direcciones:", err.message);
+    console.error("Error obteniendo direcciones locales:", err.message);
     res.json([]);
   }
 });
 
-// GET /api/clientes/pedidos (protegido) — consulta WooCommerce por email
+// GET /api/clientes/pedidos (protegido) — consulta el historial de compras locales
 app.get("/api/clientes/pedidos", authMiddleware, async (req, res) => {
   try {
     // Obtener email del cliente desde Postgres
@@ -512,40 +500,46 @@ app.get("/api/clientes/pedidos", authMiddleware, async (req, res) => {
 
     const email = result.rows[0].email;
 
-    const response = await axios.get(`${WC_URL}/wp-json/wc/v3/orders`, {
-      params: {
-        billing_email: email,
-        per_page: 20,
-        orderby: "date",
-        order: "desc",
-        consumer_key: WC_KEY,
-        consumer_secret: WC_SECRET,
-      },
+    const ordersRes = await db.query(
+      `SELECT * FROM clientes_evobike 
+       WHERE LOWER(email) = $1 
+       ORDER BY created_at DESC 
+       LIMIT 20`,
+      [email.toLowerCase()]
+    );
+
+    const pedidos = ordersRes.rows.map(p => {
+      // Parsear carrito en caso de que venga como string JSON
+      let cart = [];
+      try {
+        cart = typeof p.carrito === 'string' ? JSON.parse(p.carrito) : (p.carrito || []);
+      } catch(e) {}
+      
+      return {
+        id: p.id,
+        numero: p.mp_payment_id || `EVO-${p.id}`,
+        fecha: p.created_at,
+        estado: p.mp_status === 'approved' ? 'completed' : (p.mp_status || 'pending'),
+        total: `$ ${parseFloat(p.total_pedido || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}`,
+        envio: `$ ${parseFloat(p.envio_costo || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}`,
+        direccion_envio: p.direccion 
+          ? `${p.direccion}, ${p.ciudad || ''}, ${p.estado || ''}`.trim().replace(/, $/, '')
+          : 'No especificada',
+        productos: Array.isArray(cart) ? cart.map(i => {
+          const price = parseFloat(i.price || 0);
+          const qty = parseInt(i.quantity || 1);
+          return { 
+            nombre: i.name || i.nombre || 'Producto', 
+            cantidad: qty, 
+            subtotal: `$ ${(price * qty).toLocaleString("es-MX", { minimumFractionDigits: 2 })}` 
+          };
+        }) : [],
+      };
     });
-
-    if (!Array.isArray(response.data)) return res.json([]);
-
-    const pedidos = response.data.map(p => ({
-      id: p.id,
-      numero: p.number,
-      fecha: p.date_created,
-      estado: p.status,
-      total: `$ ${parseFloat(p.total).toLocaleString("es-MX", { minimumFractionDigits: 2 })}`,
-      envio: `$ ${parseFloat(p.shipping_total || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}`,
-      direccion_envio: p.shipping && p.shipping.address_1 
-        ? `${p.shipping.address_1}, ${p.shipping.city}, ${p.shipping.state}`
-        : (p.billing && p.billing.address_1 ? `${p.billing.address_1}, ${p.billing.city}, ${p.billing.state}` : 'No especificada'),
-      productos: p.line_items.map(i => ({ 
-        nombre: i.name, 
-        cantidad: i.quantity, 
-        subtotal: `$ ${parseFloat(i.subtotal || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}` 
-      })),
-    }));
 
     res.json(pedidos);
   } catch (err) {
-    console.error("Error obteniendo pedidos:", err.message);
-    // Si WooCommerce falla, devolvemos vacío (no queremos romper el dashboard)
+    console.error("Error obteniendo pedidos locales:", err.message);
     res.json([]);
   }
 });
