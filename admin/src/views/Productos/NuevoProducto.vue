@@ -415,7 +415,11 @@ const guardarProducto = async () => {
       fd.append('foto_principal', formulario.value.foto_principal)
     }
 
-    // Ignoramos galerías ya subidas (string) y agregamos nuevas (File)
+    // Filtramos galería existente (urls ya subidas) y la enviamos como string
+    const galeriaExistente = formulario.value.galeria.filter(foto => typeof foto === 'string')
+    fd.append('galeria_existente', JSON.stringify(galeriaExistente))
+
+    // Agregamos nuevas (File)
     for (const foto of formulario.value.galeria) {
       if (foto instanceof File) {
         const compressedGal = await compressImage(foto)

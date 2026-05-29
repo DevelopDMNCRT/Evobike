@@ -753,16 +753,29 @@ app.put('/api/admin/productos/:id', productoFields, async (req, res) => {
       return res.status(404).json({ error: 'Producto no encontrado' });
     }
 
-    // Manejar galería nueva
-    if (req.files?.galeria) {
-      // Obtener galería actual para no pisarla (o el front enviará luego que borrar)
+    // Manejar galería (existente y nueva)
+    let galeriaArr = [];
+    if (req.body.galeria_existente !== undefined) {
+      try {
+        galeriaArr = JSON.parse(req.body.galeria_existente || '[]');
+      } catch (e) {
+        console.error('Error parsing galeria_existente:', e);
+      }
+    } else {
+      // Obtener galería actual para no pisarla (comportamiento legacy de respaldo)
       const { rows: [pActual] } = await client.query('SELECT galeria FROM productos WHERE id = $1', [id]);
-      let galeriaArr = pActual?.galeria || [];
+      galeriaArr = pActual?.galeria || [];
+    }
+
+    if (req.files?.galeria) {
       for (const file of req.files.galeria) {
         const url = await uploadToCloudinary(file.buffer, 'evobike/galeria');
         galeriaArr.push(url);
       }
-      // Actualizar columna galeria
+    }
+
+    // Actualizar columna galeria si se envió galeria_existente o hay archivos nuevos
+    if (req.body.galeria_existente !== undefined || req.files?.galeria) {
       await client.query('UPDATE productos SET galeria = $1::jsonb WHERE id = $2', [JSON.stringify(galeriaArr), id]);
     }
 
